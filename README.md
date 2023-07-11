@@ -56,7 +56,7 @@ Like the project? ⚛️ [Join the team](https://callstack.com/careers/?utm_camp
 
 <!-- badges -->
 
-[build-badge]: https://img.shields.io/circleci/project/github/callstack/react-native-paper/main.svg?style=flat-square
+[build-badge] : https://img.shields.io/circleci/project/github/callstack/react-native-paper/main.svg?style=flat-square
 [build]: https://circleci.com/gh/callstack/react-native-paper
 [version-badge]: https://img.shields.io/npm/v/react-native-paper.svg?style=flat-square
 [package]: https://www.npmjs.com/package/react-native-paper
