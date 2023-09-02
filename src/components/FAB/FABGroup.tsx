@@ -1,20 +1,25 @@
 import * as React from 'react';
 import {
+  Animated,
+  ColorValue,
+  GestureResponderEvent,
   StyleProp,
   StyleSheet,
-  Animated,
-  SafeAreaView,
+  TextStyle,
   TouchableWithoutFeedback,
   View,
   ViewStyle,
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import FAB from './FAB';
-import Text from '../Typography/Text';
-import Card from '../Card/Card';
-import { withTheme } from '../../core/theming';
-import type { IconSource } from '../Icon';
-import type { Theme } from '../../types';
 import { getFABGroupColors } from './utils';
+import { useInternalTheme } from '../../core/theming';
+import type { ThemeProp } from '../../types';
+import Card from '../Card/Card';
+import type { IconSource } from '../Icon';
+import Text from '../Typography/Text';
 
 export type Props = {
   /**
@@ -25,11 +30,16 @@ export type Props = {
    * - `color`: custom icon color of the action item
    * - `labelTextColor`: custom label text color of the action item
    * - `accessibilityLabel`: accessibility label for the action, uses label by default if specified
+   * - `accessibilityHint`: accessibility hint for the action
    * - `style`: pass additional styles for the fab item, for example, `backgroundColor`
-   * - `labelStyle`: pass additional styles for the fab item label, for example, `backgroundColor`
+   * - `containerStyle`: pass additional styles for the fab item label container, for example, `backgroundColor` @supported Available in 5.x
+   * - `labelStyle`: pass additional styles for the fab item label, for example, `fontSize`
    * - `onPress`: callback that is called when `FAB` is pressed (required)
+   * - `onLongPress`: callback that is called when `FAB` is long pressed
+   * - `toggleStackOnLongPress`: callback that is called when `FAB` is long pressed
    * - `size`: size of action item. Defaults to `small`. @supported Available in v5.x
    * - `testID`: testID to be used on tests
+   * - `rippleColor`: color of the ripple effect.
    */
   actions: Array<{
     icon: IconSource;
@@ -37,11 +47,14 @@ export type Props = {
     color?: string;
     labelTextColor?: string;
     accessibilityLabel?: string;
-    style?: StyleProp<ViewStyle>;
-    labelStyle?: StyleProp<ViewStyle>;
-    onPress: () => void;
+    accessibilityHint?: string;
+    style?: Animated.WithAnimatedValue<StyleProp<ViewStyle>>;
+    containerStyle?: Animated.WithAnimatedValue<StyleProp<ViewStyle>>;
+    labelStyle?: StyleProp<TextStyle>;
+    onPress: (e: GestureResponderEvent) => void;
     size?: 'small' | 'medium';
     testID?: string;
+    rippleColor?: ColorValue;
   }>;
   /**
    * Icon to display for the `FAB`.
@@ -61,9 +74,29 @@ export type Props = {
    */
   backdropColor?: string;
   /**
+   * Color of the ripple effect.
+   */
+  rippleColor?: ColorValue;
+  /**
    * Function to execute on pressing the `FAB`.
    */
-  onPress?: () => void;
+  onPress?: (e: GestureResponderEvent) => void;
+  /**
+   * Function to execute on long pressing the `FAB`.
+   */
+  onLongPress?: (e: GestureResponderEvent) => void;
+  /**
+   * Makes actions stack appear on long press instead of on press.
+   */
+  toggleStackOnLongPress?: boolean;
+  /**
+   * Changes the delay for long press reaction.
+   */
+  delayLongPress?: number;
+  /**
+   * Allows for onLongPress when stack is opened.
+   */
+  enableLongPressWhenStackOpened?: boolean;
   /**
    * Whether the speed dial is open.
    */
@@ -85,7 +118,7 @@ export type Props = {
   /**
    * Style for the FAB. It allows to pass the FAB button styles, such as backgroundColor.
    */
-  fabStyle?: StyleProp<ViewStyle>;
+  fabStyle?: Animated.WithAnimatedValue<StyleProp<ViewStyle>>;
   /**
    * @supported Available in v5.x with theme version 3
    *
@@ -95,7 +128,11 @@ export type Props = {
   /**
    * @optional
    */
-  theme: Theme;
+  theme?: ThemeProp;
+  /**
+   * Optional label for `FAB`.
+   */
+  label?: string;
   /**
    * Pass down testID from Group props to FAB.
    */
@@ -104,16 +141,12 @@ export type Props = {
 
 /**
  * A component to display a stack of FABs with related actions in a speed dial.
- * To render the group above other components, you'll need to wrap it with the [`Portal`](portal.html) component.
- *
- * <div class="screenshots">
- *   <img class="small" src="screenshots/fab-group.gif" />
- * </div>
+ * To render the group above other components, you'll need to wrap it with the [`Portal`](../Portal) component.
  *
  * ## Usage
  * ```js
  * import * as React from 'react';
- * import { FAB, Portal, Provider } from 'react-native-paper';
+ * import { FAB, Portal, PaperProvider } from 'react-native-paper';
  *
  * const MyComponent = () => {
  *   const [state, setState] = React.useState({ open: false });
@@ -123,10 +156,11 @@ export type Props = {
  *   const { open } = state;
  *
  *   return (
- *     <Provider>
+ *     <PaperProvider>
  *       <Portal>
  *         <FAB.Group
  *           open={open}
+ *           visible
  *           icon={open ? 'calendar-today' : 'plus'}
  *           actions={[
  *             { icon: 'plus', onPress: () => console.log('Pressed add') },
@@ -154,7 +188,7 @@ export type Props = {
  *           }}
  *         />
  *       </Portal>
- *     </Provider>
+ *     </PaperProvider>
  *   );
  * };
  *
@@ -166,17 +200,24 @@ const FABGroup = ({
   icon,
   open,
   onPress,
+  onLongPress,
+  toggleStackOnLongPress,
   accessibilityLabel,
-  theme,
+  theme: themeOverrides,
   style,
   fabStyle,
   visible,
+  label,
   testID,
   onStateChange,
   color: colorProp,
+  delayLongPress = 200,
   variant = 'primary',
+  enableLongPressWhenStackOpened = false,
   backdropColor: customBackdropColor,
+  rippleColor,
 }: Props) => {
+  const theme = useInternalTheme(themeOverrides);
   const { current: backdrop } = React.useRef<Animated.Value>(
     new Animated.Value(0)
   );
@@ -190,8 +231,8 @@ const FABGroup = ({
         label?: string;
         color?: string;
         accessibilityLabel?: string;
-        style?: StyleProp<ViewStyle>;
-        onPress: () => void;
+        style?: Animated.WithAnimatedValue<StyleProp<ViewStyle>>;
+        onPress: (e: GestureResponderEvent) => void;
         testID?: string;
       }[]
     | null
@@ -280,6 +321,14 @@ const FABGroup = ({
       : -8
   );
 
+  const { top, bottom, right, left } = useSafeAreaInsets();
+  const containerPaddings = {
+    paddingBottom: bottom,
+    paddingRight: right,
+    paddingLeft: left,
+    paddingTop: top,
+  };
+
   if (actions.length !== prevActions?.length) {
     animations.current = actions.map(
       (_, i) => animations.current[i] || new Animated.Value(open ? 1 : 0)
@@ -288,8 +337,11 @@ const FABGroup = ({
   }
 
   return (
-    <View pointerEvents="box-none" style={[styles.container, style]}>
-      <TouchableWithoutFeedback onPress={close}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.container, containerPaddings, style]}
+    >
+      <TouchableWithoutFeedback accessibilityRole="button" onPress={close}>
         <Animated.View
           pointerEvents={open ? 'auto' : 'none'}
           style={[
@@ -301,28 +353,45 @@ const FABGroup = ({
           ]}
         />
       </TouchableWithoutFeedback>
-      <SafeAreaView pointerEvents="box-none" style={styles.safeArea}>
+      <View pointerEvents="box-none" style={styles.safeArea}>
         <View pointerEvents={open ? 'box-none' : 'none'}>
-          {actions.map((it, i) => (
-            <View
-              key={i} // eslint-disable-line react/no-array-index-key
-              style={[
-                styles.item,
-                {
-                  marginHorizontal:
-                    typeof it.size === 'undefined' || it.size === 'small'
-                      ? 24
-                      : 16,
-                },
-              ]}
-              pointerEvents={open ? 'box-none' : 'none'}
-            >
-              {it.label && (
-                <View>
-                  <Card
-                    style={
-                      [
-                        styles.label,
+          {actions.map((it, i) => {
+            const labelTextStyle = {
+              color: it.labelTextColor ?? labelColor,
+              ...(isV3 ? theme.fonts.titleMedium : {}),
+            };
+            const marginHorizontal =
+              typeof it.size === 'undefined' || it.size === 'small' ? 24 : 16;
+            const accessibilityLabel =
+              typeof it.accessibilityLabel !== 'undefined'
+                ? it.accessibilityLabel
+                : it.label;
+            const size = typeof it.size !== 'undefined' ? it.size : 'small';
+
+            return (
+              <View
+                key={i} // eslint-disable-line react/no-array-index-key
+                style={[
+                  styles.item,
+                  {
+                    marginHorizontal,
+                  },
+                ]}
+                pointerEvents={open ? 'box-none' : 'none'}
+              >
+                {it.label && (
+                  <View>
+                    <Card
+                      mode={isV3 ? 'contained' : 'elevated'}
+                      onPress={(e) => {
+                        it.onPress(e);
+                        close();
+                      }}
+                      accessibilityHint={it.accessibilityHint}
+                      accessibilityLabel={accessibilityLabel}
+                      accessibilityRole="button"
+                      style={[
+                        styles.containerStyle,
                         {
                           transform: [
                             isV3
@@ -331,37 +400,24 @@ const FABGroup = ({
                           ],
                           opacity: opacities[i],
                         },
-                        isV3 && styles.v3LabelStyle,
-                        it.labelStyle,
-                      ] as StyleProp<ViewStyle>
-                    }
-                    onPress={() => {
-                      it.onPress();
-                      close();
-                    }}
-                    accessibilityLabel={
-                      it.accessibilityLabel !== 'undefined'
-                        ? it.accessibilityLabel
-                        : it.label
-                    }
-                    accessibilityRole="button"
-                    {...(isV3 && { elevation: 0 })}
-                  >
-                    <Text
-                      variant="titleMedium"
-                      style={{ color: it.labelTextColor ?? labelColor }}
+                        isV3 && styles.v3ContainerStyle,
+                        it.containerStyle,
+                      ]}
                     >
-                      {it.label}
-                    </Text>
-                  </Card>
-                </View>
-              )}
-              <FAB
-                size={typeof it.size !== 'undefined' ? it.size : 'small'}
-                icon={it.icon}
-                color={it.color}
-                style={
-                  [
+                      <Text
+                        variant="titleMedium"
+                        style={[labelTextStyle, it.labelStyle]}
+                      >
+                        {it.label}
+                      </Text>
+                    </Card>
+                  </View>
+                )}
+                <FAB
+                  size={size}
+                  icon={it.icon}
+                  color={it.color}
+                  style={[
                     {
                       transform: [{ scale: scales[i] }],
                       opacity: opacities[i],
@@ -369,29 +425,37 @@ const FABGroup = ({
                     },
                     isV3 && { transform: [{ translateY: translations[i] }] },
                     it.style,
-                  ] as StyleProp<ViewStyle>
-                }
-                onPress={() => {
-                  it.onPress();
-                  close();
-                }}
-                accessibilityLabel={
-                  typeof it.accessibilityLabel !== 'undefined'
-                    ? it.accessibilityLabel
-                    : it.label
-                }
-                accessibilityRole="button"
-                testID={it.testID}
-                visible={open}
-              />
-            </View>
-          ))}
+                  ]}
+                  onPress={(e) => {
+                    it.onPress(e);
+                    close();
+                  }}
+                  accessibilityLabel={accessibilityLabel}
+                  accessibilityRole="button"
+                  testID={it.testID}
+                  visible={open}
+                  rippleColor={it.rippleColor}
+                />
+              </View>
+            );
+          })}
         </View>
         <FAB
-          onPress={() => {
-            onPress?.();
-            toggle();
+          onPress={(e) => {
+            onPress?.(e);
+            if (!toggleStackOnLongPress || open) {
+              toggle();
+            }
           }}
+          onLongPress={(e) => {
+            if (!open || enableLongPressWhenStackOpened) {
+              onLongPress?.(e);
+              if (toggleStackOnLongPress) {
+                toggle();
+              }
+            }
+          }}
+          delayLongPress={delayLongPress}
           icon={icon}
           color={colorProp}
           accessibilityLabel={accessibilityLabel}
@@ -399,22 +463,22 @@ const FABGroup = ({
           accessibilityState={{ expanded: open }}
           style={[styles.fab, fabStyle]}
           visible={visible}
+          label={label}
           testID={testID}
           variant={variant}
+          rippleColor={rippleColor}
         />
-      </SafeAreaView>
+      </View>
     </View>
   );
 };
 
 FABGroup.displayName = 'FAB.Group';
 
-export default withTheme(FABGroup);
+export default FABGroup;
 
 // @component-docs ignore-next-line
-const FABGroupWithTheme = withTheme(FABGroup);
-// @component-docs ignore-next-line
-export { FABGroupWithTheme as FABGroup };
+export { FABGroup };
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -432,7 +496,7 @@ const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  label: {
+  containerStyle: {
     borderRadius: 5,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -446,7 +510,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
-  v3LabelStyle: {
+  // eslint-disable-next-line react-native/no-color-literals
+  v3ContainerStyle: {
     backgroundColor: 'transparent',
     elevation: 0,
   },

@@ -1,35 +1,38 @@
 import * as React from 'react';
-import color from 'color';
-import {
-  Animated,
-  View,
-  ViewStyle,
-  StyleSheet,
-  StyleProp,
-  Easing,
-  ScrollView,
-  Text,
-  Platform,
-  I18nManager,
-} from 'react-native';
-import Surface from '../Surface';
-import Icon from '../Icon';
-import TouchableRipple from '../TouchableRipple/TouchableRipple';
-import type { $RemoveChildren, Theme } from '../../types';
-import type { IconSource } from '../Icon';
-import { withTheme } from '../../core/theming';
 import type {
   AccessibilityState,
+  ColorValue,
   NativeSyntheticEvent,
   TextLayoutEventData,
 } from 'react-native';
-import AnimatedText from '../Typography/AnimatedText';
+import {
+  Animated,
+  Easing,
+  GestureResponderEvent,
+  I18nManager,
+  Platform,
+  ScrollView,
+  StyleProp,
+  StyleSheet,
+  View,
+  ViewStyle,
+} from 'react-native';
+
+import color from 'color';
+
 import { getCombinedStyles, getFABColors } from './utils';
+import { useInternalTheme } from '../../core/theming';
+import type { $Omit, $RemoveChildren, ThemeProp } from '../../types';
+import type { IconSource } from '../Icon';
+import Icon from '../Icon';
+import Surface from '../Surface';
+import TouchableRipple from '../TouchableRipple/TouchableRipple';
+import AnimatedText from '../Typography/AnimatedText';
 
 export type AnimatedFABIconMode = 'static' | 'dynamic';
 export type AnimatedFABAnimateFrom = 'left' | 'right';
 
-export type Props = $RemoveChildren<typeof Surface> & {
+export type Props = $Omit<$RemoveChildren<typeof Surface>, 'mode'> & {
   /**
    * Icon to display for the `FAB`.
    */
@@ -56,6 +59,10 @@ export type Props = $RemoveChildren<typeof Surface> & {
    */
   color?: string;
   /**
+   * Color of the ripple effect.
+   */
+  rippleColor?: ColorValue;
+  /**
    * Whether `FAB` is disabled. A disabled button is greyed out and `onPress` is not called on touch.
    */
   disabled?: boolean;
@@ -66,11 +73,15 @@ export type Props = $RemoveChildren<typeof Surface> & {
   /**
    * Function to execute on press.
    */
-  onPress?: () => void;
+  onPress?: (e: GestureResponderEvent) => void;
   /**
    * Function to execute on long press.
    */
-  onLongPress?: () => void;
+  onLongPress?: (e: GestureResponderEvent) => void;
+  /**
+   * The number of milliseconds a user must touch the element before executing `onLongPress`.
+   */
+  delayLongPress?: number;
   /**
    * Whether icon should be translated to the end of extended `FAB` or be static and stay in the same place. The default value is `dynamic`.
    */
@@ -84,16 +95,19 @@ export type Props = $RemoveChildren<typeof Surface> & {
    */
   extended: boolean;
   /**
-   * @supported Available in v3.x with theme version 3
+   * @supported Available in v5.x with theme version 3
    *
    * Color mappings variant for combinations of container and icon colors.
    */
   variant?: 'primary' | 'secondary' | 'tertiary' | 'surface';
-  style?: StyleProp<ViewStyle>;
+  style?: Animated.WithAnimatedValue<StyleProp<ViewStyle>>;
   /**
    * @optional
    */
-  theme: Theme;
+  theme?: ThemeProp;
+  /**
+   * TestID used for testing purposes
+   */
   testID?: string;
 };
 
@@ -102,10 +116,6 @@ const SCALE = 0.9;
 
 /**
  * An animated, extending horizontally floating action button represents the primary action in an application.
- *
- * <div class="screenshots">
- *   <img class="small" src="screenshots/animated-fab.gif" />
- * </div>
  *
  * ## Usage
  * ```js
@@ -186,20 +196,24 @@ const AnimatedFAB = ({
   accessibilityLabel = label,
   accessibilityState,
   color: customColor,
+  rippleColor: customRippleColor,
   disabled,
   onPress,
   onLongPress,
-  theme,
+  delayLongPress,
+  theme: themeOverrides,
   style,
   visible = true,
-  uppercase = !theme.isV3,
-  testID,
+  uppercase: uppercaseProp,
+  testID = 'animated-fab',
   animateFrom = 'right',
   extended = false,
   iconMode = 'dynamic',
   variant = 'primary',
   ...rest
 }: Props) => {
+  const theme = useInternalTheme(themeOverrides);
+  const uppercase: boolean = uppercaseProp ?? !theme.isV3;
   const isIOS = Platform.OS === 'ios';
   const isAnimatedFromRight = animateFrom === 'right';
   const isIconStatic = iconMode === 'static';
@@ -234,15 +248,19 @@ const AnimatedFAB = ({
     }
   }, [visible, scale, visibility]);
 
+  const { backgroundColor: customBackgroundColor, ...restStyle } =
+    (StyleSheet.flatten(style) || {}) as ViewStyle;
+
   const { backgroundColor, foregroundColor } = getFABColors({
     theme,
     variant,
     disabled,
     customColor,
-    style,
+    customBackgroundColor,
   });
 
-  const rippleColor = color(foregroundColor).alpha(0.12).rgb().string();
+  const rippleColor =
+    customRippleColor || color(foregroundColor).alpha(0.12).rgb().string();
 
   const extendedWidth = textWidth + SIZE + borderRadius;
 
@@ -291,36 +309,46 @@ const AnimatedFAB = ({
     animFAB,
   });
 
+  const font = isV3 ? theme.fonts.labelLarge : theme.fonts.medium;
+
   const textStyle = {
     color: foregroundColor,
-    ...(isV3 ? theme.typescale.labelLarge : theme.fonts.medium),
+    ...font,
   };
 
   const md2Elevation = disabled || !isIOS ? 0 : 6;
   const md3Elevation = disabled || !isIOS ? 0 : 3;
 
+  const shadowStyle = isV3 ? styles.v3Shadow : styles.shadow;
+  const baseStyle = [
+    StyleSheet.absoluteFill,
+    disabled ? styles.disabled : shadowStyle,
+  ];
+
+  const newAccessibilityState = { ...accessibilityState, disabled };
+
   return (
     <Surface
       {...rest}
-      style={
-        [
-          {
-            opacity: visibility,
-            transform: [
-              {
-                scale: visibility,
-              },
-            ],
-            borderRadius,
-          },
-          !isV3 && {
-            elevation: md2Elevation,
-          },
-          styles.container,
-          style,
-        ] as StyleProp<ViewStyle>
-      }
+      testID={`${testID}-container`}
+      style={[
+        {
+          opacity: visibility,
+          transform: [
+            {
+              scale: visibility,
+            },
+          ],
+          borderRadius,
+        },
+        !isV3 && {
+          elevation: md2Elevation,
+        },
+        styles.container,
+        restStyle,
+      ]}
       {...(isV3 && { elevation: md3Elevation })}
+      theme={theme}
     >
       <Animated.View
         style={[
@@ -342,8 +370,7 @@ const AnimatedFAB = ({
           <Animated.View
             pointerEvents="none"
             style={[
-              StyleSheet.absoluteFill,
-              disabled ? styles.disabled : styles.shadow,
+              baseStyle,
               {
                 width: extendedWidth,
                 opacity: animFAB.interpolate({
@@ -353,12 +380,12 @@ const AnimatedFAB = ({
                 borderRadius,
               },
             ]}
+            testID={`${testID}-extended-shadow`}
           />
           <Animated.View
             pointerEvents="none"
             style={[
-              StyleSheet.absoluteFill,
-              disabled ? styles.disabled : styles.shadow,
+              baseStyle,
               {
                 opacity: animFAB.interpolate({
                   inputRange: propForDirection([distance, 0.9 * distance, 0]),
@@ -375,6 +402,7 @@ const AnimatedFAB = ({
               },
               combinedStyles.absoluteFill,
             ]}
+            testID={`${testID}-shadow`}
           />
         </View>
         <Animated.View
@@ -396,13 +424,15 @@ const AnimatedFAB = ({
               borderless
               onPress={onPress}
               onLongPress={onLongPress}
+              delayLongPress={delayLongPress}
               rippleColor={rippleColor}
               disabled={disabled}
               accessibilityLabel={accessibilityLabel}
               accessibilityRole="button"
-              accessibilityState={{ ...accessibilityState, disabled }}
+              accessibilityState={newAccessibilityState}
               testID={testID}
               style={{ borderRadius }}
+              theme={theme}
             >
               <View
                 style={[
@@ -422,7 +452,7 @@ const AnimatedFAB = ({
         style={[styles.iconWrapper, combinedStyles.iconWrapper]}
         pointerEvents="none"
       >
-        <Icon source={icon} size={24} color={foregroundColor} />
+        <Icon source={icon} size={24} color={foregroundColor} theme={theme} />
       </Animated.View>
 
       <View pointerEvents="none">
@@ -443,7 +473,8 @@ const AnimatedFAB = ({
               opacity: animFAB.interpolate({
                 inputRange: propForDirection([distance, 0.7 * distance, 0]),
                 outputRange: propForDirection([1, 0, 0]),
-              }),
+              }) as unknown as number,
+              // TODO: check
               transform: [
                 {
                   translateX: animFAB.interpolate({
@@ -457,6 +488,8 @@ const AnimatedFAB = ({
             uppercase && styles.uppercaseLabel,
             textStyle,
           ]}
+          theme={theme}
+          testID={`${testID}-text`}
         >
           {label}
         </AnimatedText>
@@ -468,7 +501,20 @@ const AnimatedFAB = ({
         // proper text measurements there is a need to additionaly render that text, but
         // wrapped in absolutely positioned `ScrollView` which height is 0.
         <ScrollView style={styles.textPlaceholderContainer}>
-          <Text onTextLayout={onTextLayout}>{label}</Text>
+          <AnimatedText
+            variant="labelLarge"
+            numberOfLines={1}
+            onTextLayout={onTextLayout}
+            ellipsizeMode={'tail'}
+            style={[
+              styles.label,
+              uppercase && styles.uppercaseLabel,
+              textStyle,
+            ]}
+            theme={theme}
+          >
+            {label}
+          </AnimatedText>
         </ScrollView>
       )}
     </Surface>
@@ -482,6 +528,7 @@ const styles = StyleSheet.create({
   disabled: {
     elevation: 0,
   },
+  // eslint-disable-next-line react-native/no-color-literals
   container: {
     position: 'absolute',
     backgroundColor: 'transparent',
@@ -495,6 +542,9 @@ const styles = StyleSheet.create({
   },
   shadow: {
     elevation: 6,
+  },
+  v3Shadow: {
+    elevation: 3,
   },
   iconWrapper: {
     alignItems: 'center',
@@ -515,4 +565,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default withTheme(AnimatedFAB);
+export default AnimatedFAB;

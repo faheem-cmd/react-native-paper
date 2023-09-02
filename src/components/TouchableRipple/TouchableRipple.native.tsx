@@ -1,32 +1,39 @@
 import * as React from 'react';
 import {
-  BackgroundPropType,
+  PressableAndroidRippleConfig,
   StyleProp,
   Platform,
-  TouchableHighlight,
-  TouchableNativeFeedback,
-  TouchableWithoutFeedback,
-  View,
   ViewStyle,
   StyleSheet,
+  Pressable,
+  GestureResponderEvent,
+  View,
+  ColorValue,
 } from 'react-native';
-import { withTheme } from '../../core/theming';
-import type { Theme } from '../../types';
+
 import { getTouchableRippleColors } from './utils';
+import { Settings, SettingsContext } from '../../core/settings';
+import { useInternalTheme } from '../../core/theming';
+import type { ThemeProp } from '../../types';
+import hasTouchHandler from '../../utils/hasTouchHandler';
 
 const ANDROID_VERSION_LOLLIPOP = 21;
 const ANDROID_VERSION_PIE = 28;
 
-type Props = React.ComponentProps<typeof TouchableWithoutFeedback> & {
+export type Props = React.ComponentProps<typeof Pressable> & {
   borderless?: boolean;
-  background?: BackgroundPropType;
+  background?: PressableAndroidRippleConfig;
+  centered?: boolean;
   disabled?: boolean;
-  onPress?: () => void | null;
-  rippleColor?: string;
+  onPress?: (e: GestureResponderEvent) => void | null;
+  onLongPress?: (e: GestureResponderEvent) => void;
+  onPressIn?: (e: GestureResponderEvent) => void;
+  onPressOut?: (e: GestureResponderEvent) => void;
+  rippleColor?: ColorValue;
   underlayColor?: string;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
-  theme: Theme;
+  theme?: ThemeProp;
 };
 
 const TouchableRipple = ({
@@ -37,10 +44,23 @@ const TouchableRipple = ({
   rippleColor,
   underlayColor,
   children,
-  theme,
+  theme: themeOverrides,
   ...rest
 }: Props) => {
-  const disabled = disabledProp || !rest.onPress;
+  const theme = useInternalTheme(themeOverrides);
+  const { rippleEffectEnabled } = React.useContext<Settings>(SettingsContext);
+
+  const { onPress, onLongPress, onPressIn, onPressOut } = rest;
+
+  const hasPassedTouchHandler = hasTouchHandler({
+    onPress,
+    onLongPress,
+    onPressIn,
+    onPressOut,
+  });
+
+  const disabled = disabledProp || !hasPassedTouchHandler;
+
   const { calculatedRippleColor, calculatedUnderlayColor } =
     getTouchableRippleColors({
       theme,
@@ -56,33 +76,47 @@ const TouchableRipple = ({
     borderless;
 
   if (TouchableRipple.supported) {
+    const androidRipple = rippleEffectEnabled
+      ? background ?? {
+          color: calculatedRippleColor,
+          borderless,
+          foreground: useForeground,
+        }
+      : undefined;
+
     return (
-      <TouchableNativeFeedback
+      <Pressable
         {...rest}
         disabled={disabled}
-        useForeground={useForeground}
-        background={
-          background != null
-            ? background
-            : TouchableNativeFeedback.Ripple(calculatedRippleColor, borderless)
-        }
+        style={[borderless && styles.overflowHidden, style]}
+        android_ripple={androidRipple}
       >
-        <View style={[borderless && styles.overflowHidden, style]}>
-          {React.Children.only(children)}
-        </View>
-      </TouchableNativeFeedback>
+        {React.Children.only(children)}
+      </Pressable>
     );
   }
 
   return (
-    <TouchableHighlight
+    <Pressable
       {...rest}
       disabled={disabled}
       style={[borderless && styles.overflowHidden, style]}
-      underlayColor={calculatedUnderlayColor}
     >
-      {React.Children.only(children)}
-    </TouchableHighlight>
+      {({ pressed }) => (
+        <>
+          {pressed && rippleEffectEnabled && (
+            <View
+              testID="touchable-ripple-underlay"
+              style={[
+                styles.underlay,
+                { backgroundColor: calculatedUnderlayColor },
+              ]}
+            />
+          )}
+          {React.Children.only(children)}
+        </>
+      )}
+    </Pressable>
   );
 };
 
@@ -93,6 +127,10 @@ const styles = StyleSheet.create({
   overflowHidden: {
     overflow: 'hidden',
   },
+  underlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+  },
 });
 
-export default withTheme(TouchableRipple);
+export default TouchableRipple;

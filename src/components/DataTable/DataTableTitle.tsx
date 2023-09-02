@@ -1,19 +1,22 @@
 import * as React from 'react';
 import {
   Animated,
+  GestureResponderEvent,
+  I18nManager,
   StyleProp,
   StyleSheet,
+  TextStyle,
   TouchableWithoutFeedback,
   View,
   ViewStyle,
-  I18nManager,
-  TextStyle,
 } from 'react-native';
+
 import color from 'color';
+
+import { useInternalTheme } from '../../core/theming';
+import type { ThemeProp } from '../../types';
 import MaterialCommunityIcon from '../MaterialCommunityIcon';
 import Text from '../Typography/Text';
-import { withTheme } from '../../core/theming';
-import type { Theme } from '../../types';
 
 export type Props = React.ComponentPropsWithRef<
   typeof TouchableWithoutFeedback
@@ -37,7 +40,7 @@ export type Props = React.ComponentPropsWithRef<
   /**
    * Function to execute on press.
    */
-  onPress?: () => void;
+  onPress?: (e: GestureResponderEvent) => void;
   style?: StyleProp<ViewStyle>;
   /**
    * Text content style of the `DataTableTitle`.
@@ -46,18 +49,11 @@ export type Props = React.ComponentPropsWithRef<
   /**
    * @optional
    */
-  theme: Theme;
+  theme?: ThemeProp;
 };
 
 /**
  * A component to display title in table header.
- *
- * <div class="screenshots">
- *   <figure>
- *     <img class="medium" src="screenshots/data-table-header.png" />
- *   </figure>
- * </div>
- *
  *
  * ## Usage
  * ```js
@@ -87,12 +83,13 @@ const DataTableTitle = ({
   children,
   onPress,
   sortDirection,
-  theme,
   textStyle,
   style,
+  theme: themeOverrides,
   numberOfLines = 1,
   ...rest
 }: Props) => {
+  const theme = useInternalTheme(themeOverrides);
   const { current: spinAnim } = React.useRef<Animated.Value>(
     new Animated.Value(sortDirection === 'ascending' ? 0 : 1)
   );
@@ -120,7 +117,7 @@ const DataTableTitle = ({
         name="arrow-up"
         size={16}
         color={textColor}
-        direction={I18nManager.isRTL ? 'rtl' : 'ltr'}
+        direction={I18nManager.getConstants().isRTL ? 'rtl' : 'ltr'}
       />
     </Animated.View>
   ) : null;
@@ -138,7 +135,7 @@ const DataTableTitle = ({
             // if numberOfLines causes wrap, center is lost. Align directly, sensitive to numeric and RTL
             numberOfLines > 1
               ? numeric
-                ? I18nManager.isRTL
+                ? I18nManager.getConstants().isRTL
                   ? styles.leftText
                   : styles.rightText
                 : styles.centerText
@@ -198,7 +195,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export default withTheme(DataTableTitle);
+export default DataTableTitle;
 
 // @component-docs ignore-next-line
 export { DataTableTitle };

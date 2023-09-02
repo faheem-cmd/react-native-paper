@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { Animated, View, StyleSheet } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
+
 import { RadioButtonContext, RadioButtonContextType } from './RadioButtonGroup';
 import { handlePress, isChecked } from './utils';
-import TouchableRipple from '../TouchableRipple/TouchableRipple';
-import { withTheme } from '../../core/theming';
-import type { $RemoveChildren, Theme } from '../../types';
+import { useInternalTheme } from '../../core/theming';
+import type { $RemoveChildren, ThemeProp } from '../../types';
 import { getAndroidSelectionControlColor } from '../Checkbox/utils';
+import TouchableRipple from '../TouchableRipple/TouchableRipple';
 
 export type Props = $RemoveChildren<typeof TouchableRipple> & {
   /**
@@ -35,7 +36,7 @@ export type Props = $RemoveChildren<typeof TouchableRipple> & {
   /**
    * @optional
    */
-  theme: Theme;
+  theme?: ThemeProp;
   /**
    * testID to be used on tests.
    */
@@ -48,27 +49,17 @@ const BORDER_WIDTH = 2;
  * Radio buttons allow the selection a single option from a set.
  * This component follows platform guidelines for Android, but can be used
  * on any platform.
- *
- * <div class="screenshots">
- *   <figure>
- *     <img src="screenshots/radio-enabled.android.png" />
- *     <figcaption>Enabled</figcaption>
- *   </figure>
- *   <figure>
- *     <img src="screenshots/radio-disabled.android.png" />
- *     <figcaption>Disabled</figcaption>
- *   </figure>
- * </div>
  */
 const RadioButtonAndroid = ({
   disabled,
   onPress,
-  theme,
+  theme: themeOverrides,
   value,
   status,
   testID,
   ...rest
 }: Props) => {
+  const theme = useInternalTheme(themeOverrides);
   const { current: borderAnim } = React.useRef<Animated.Value>(
     new Animated.Value(BORDER_WIDTH)
   );
@@ -134,11 +125,12 @@ const RadioButtonAndroid = ({
             onPress={
               disabled
                 ? undefined
-                : () => {
+                : (event) => {
                     handlePress({
                       onPress,
                       onValueChange: context?.onValueChange,
                       value,
+                      event,
                     });
                   }
             }
@@ -147,6 +139,7 @@ const RadioButtonAndroid = ({
             accessibilityLiveRegion="polite"
             style={styles.container}
             testID={testID}
+            theme={theme}
           >
             <Animated.View
               style={[
@@ -201,9 +194,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export default withTheme(RadioButtonAndroid);
+export default RadioButtonAndroid;
 
 // @component-docs ignore-next-line
-const RadioButtonAndroidWithTheme = withTheme(RadioButtonAndroid);
-// @component-docs ignore-next-line
-export { RadioButtonAndroidWithTheme as RadioButtonAndroid };
+export { RadioButtonAndroid };

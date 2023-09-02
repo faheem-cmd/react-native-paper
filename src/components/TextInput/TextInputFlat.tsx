@@ -1,57 +1,57 @@
 import * as React from 'react';
 import {
-  View,
-  Animated,
-  TextInput as NativeTextInput,
-  StyleSheet,
   I18nManager,
   Platform,
+  StyleSheet,
+  TextInput as NativeTextInput,
   TextStyle,
+  View,
 } from 'react-native';
-import InputLabel from './Label/InputLabel';
+
+import { Underline } from './Addons/Underline';
+import { AdornmentSide, AdornmentType, InputMode } from './Adornment/enums';
 import TextInputAdornment, {
   TextInputAdornmentProps,
 } from './Adornment/TextInputAdornment';
-import type { RenderProps, ChildTextInputProps } from './types';
-import { useTheme } from '../../core/theming';
-
-import {
-  MAXIMIZED_LABEL_FONT_SIZE,
-  MINIMIZED_LABEL_FONT_SIZE,
-  LABEL_WIGGLE_X_OFFSET,
-  ADORNMENT_SIZE,
-  MINIMIZED_LABEL_Y_OFFSET,
-  LABEL_PADDING_TOP_DENSE,
-  MIN_DENSE_HEIGHT_WL,
-  MIN_DENSE_HEIGHT,
-} from './constants';
-
-import {
-  calculateLabelTopPosition,
-  calculateInputHeight,
-  calculatePadding,
-  adjustPaddingFlat,
-  Padding,
-  interpolatePlaceholder,
-  calculateFlatAffixTopPosition,
-  calculateFlatInputHorizontalPadding,
-  getFlatInputColors,
-  getConstants,
-} from './helpers';
 import {
   getAdornmentConfig,
   getAdornmentStyleAdjustmentForNativeInput,
 } from './Adornment/TextInputAdornment';
-import { AdornmentSide, AdornmentType, InputMode } from './Adornment/enums';
+import {
+  ADORNMENT_SIZE,
+  LABEL_PADDING_TOP_DENSE,
+  LABEL_WIGGLE_X_OFFSET,
+  MAXIMIZED_LABEL_FONT_SIZE,
+  MINIMIZED_LABEL_FONT_SIZE,
+  MINIMIZED_LABEL_Y_OFFSET,
+  MIN_DENSE_HEIGHT,
+  MIN_DENSE_HEIGHT_WL,
+} from './constants';
+import {
+  adjustPaddingFlat,
+  calculateFlatAffixTopPosition,
+  calculateFlatInputHorizontalPadding,
+  calculateInputHeight,
+  calculateLabelTopPosition,
+  calculatePadding,
+  getConstants,
+  getFlatInputColors,
+  Padding,
+} from './helpers';
+import InputLabel from './Label/InputLabel';
+import type { ChildTextInputProps, RenderProps } from './types';
 
 const TextInputFlat = ({
   disabled = false,
   editable = true,
   label,
   error = false,
-  selectionColor,
+  selectionColor: customSelectionColor,
+  cursorColor,
   underlineColor,
+  underlineStyle,
   activeUnderlineColor,
+  textColor,
   dense,
   style,
   theme,
@@ -69,12 +69,13 @@ const TextInputFlat = ({
   left,
   right,
   placeholderTextColor,
-  testID = 'text-input',
+  testID = 'text-input-flat',
+  contentStyle,
   ...rest
 }: ChildTextInputProps) => {
   const isAndroid = Platform.OS === 'android';
   const { colors, isV3, roundness } = theme;
-  const font = !isV3 ? theme.fonts.regular : {};
+  const font = isV3 ? theme.fonts.bodyLarge : theme.fonts.regular;
   const hasActiveOutline = parentState.focused || error;
 
   const { LABEL_PADDING_TOP, FLAT_INPUT_OFFSET, MIN_HEIGHT } =
@@ -82,6 +83,7 @@ const TextInputFlat = ({
 
   const {
     fontSize: fontSizeStyle,
+    lineHeight,
     fontWeight,
     height,
     paddingHorizontal,
@@ -136,9 +138,12 @@ const TextInputFlat = ({
     placeholderColor,
     errorColor,
     backgroundColor,
+    selectionColor,
   } = getFlatInputColors({
     underlineColor,
     activeUnderlineColor,
+    customSelectionColor,
+    textColor,
     disabled,
     error,
     theme,
@@ -159,9 +164,11 @@ const TextInputFlat = ({
   const labelHalfHeight = labelHeight / 2;
 
   const baseLabelTranslateX =
-    (I18nManager.isRTL ? 1 : -1) *
+    (I18nManager.getConstants().isRTL ? 1 : -1) *
       (labelHalfWidth - (labelScale * labelWidth) / 2) +
-    (1 - labelScale) * (I18nManager.isRTL ? -1 : 1) * paddingLeft;
+    (1 - labelScale) *
+      (I18nManager.getConstants().isRTL ? -1 : 1) *
+      paddingLeft;
 
   const minInputHeight = dense
     ? (label ? MIN_DENSE_HEIGHT_WL : MIN_DENSE_HEIGHT) - LABEL_PADDING_TOP_DENSE
@@ -188,6 +195,7 @@ const TextInputFlat = ({
     dense: dense ? dense : null,
     topPosition,
     fontSize,
+    lineHeight,
     label,
     scale: fontScale,
     isAndroid,
@@ -207,7 +215,7 @@ const TextInputFlat = ({
     -labelHalfHeight - (topPosition + MINIMIZED_LABEL_Y_OFFSET);
 
   const placeholderOpacity = hasActiveOutline
-    ? interpolatePlaceholder(parentState.labeled, hasActiveOutline)
+    ? parentState.labeled
     : parentState.labelLayout.measured
     ? 1
     : 0;
@@ -242,17 +250,27 @@ const TextInputFlat = ({
     label,
     onLayoutAnimatedText,
     placeholderOpacity,
-    error,
+    labelError: error,
     placeholderStyle: styles.placeholder,
     baseLabelTranslateY,
     baseLabelTranslateX,
     font,
     fontSize,
+    lineHeight,
     fontWeight,
     labelScale,
     wiggleOffsetX: LABEL_WIGGLE_X_OFFSET,
     topPosition,
-    paddingOffset: { paddingLeft, paddingRight },
+    paddingLeft: isAndroid
+      ? I18nManager.isRTL
+        ? paddingRight
+        : paddingLeft
+      : paddingLeft,
+    paddingRight: isAndroid
+      ? I18nManager.isRTL
+        ? paddingLeft
+        : paddingRight
+      : paddingRight,
     hasActiveOutline,
     activeColor,
     placeholderColor,
@@ -260,7 +278,15 @@ const TextInputFlat = ({
     roundness,
     maxFontSizeMultiplier: rest.maxFontSizeMultiplier,
     testID,
+    contentStyle,
+    opacity:
+      parentState.value || parentState.focused
+        ? parentState.labelLayout.measured
+          ? 1
+          : 0
+        : 1,
   };
+
   const affixTopPosition = {
     [AdornmentSide.Left]: leftAffixTopPosition,
     [AdornmentSide.Right]: rightAffixTopPosition,
@@ -281,13 +307,14 @@ const TextInputFlat = ({
     onAffixChange,
     isTextInputFocused: parentState.focused,
     maxFontSizeMultiplier: rest.maxFontSizeMultiplier,
+    disabled,
   };
   if (adornmentConfig.length) {
     adornmentProps = {
       ...adornmentProps,
       left,
       right,
-      textStyle: { ...font, fontSize, fontWeight },
+      textStyle: { ...font, fontSize, lineHeight, fontWeight },
       visible: parentState.labeled,
     };
   }
@@ -295,12 +322,14 @@ const TextInputFlat = ({
   return (
     <View style={[containerStyle, viewStyle]}>
       <Underline
+        style={underlineStyle}
         hasActiveOutline={hasActiveOutline}
         parentState={parentState}
         underlineColorCustom={underlineColorCustom}
         error={error}
         colors={colors}
         activeColor={activeColor}
+        theme={theme}
       />
       <View
         style={[
@@ -310,7 +339,7 @@ const TextInputFlat = ({
           },
         ]}
       >
-        {!isAndroid && multiline && !!label && (
+        {!isAndroid && multiline && !!label && !disabled && (
           // Workaround for: https://github.com/callstack/react-native-paper/issues/2799
           // Patch for a multiline TextInput with fixed height, which allow to avoid covering input label with its value.
           <View
@@ -328,43 +357,55 @@ const TextInputFlat = ({
             ]}
           />
         )}
-        <InputLabel parentState={parentState} labelProps={labelProps} />
+        {label ? (
+          <InputLabel
+            labeled={parentState.labeled}
+            error={parentState.error}
+            focused={parentState.focused}
+            wiggle={Boolean(parentState.value && labelProps.labelError)}
+            labelLayoutMeasured={parentState.labelLayout.measured}
+            labelLayoutWidth={parentState.labelLayout.width}
+            {...labelProps}
+          />
+        ) : null}
         {render?.({
-          testID: `${testID}-flat`,
           ...rest,
           ref: innerRef,
           onChangeText,
           placeholder: label ? parentState.placeholder : rest.placeholder,
-          placeholderTextColor: placeholderTextColor ?? placeholderColor,
           editable: !disabled && editable,
-          selectionColor:
-            typeof selectionColor === 'undefined'
-              ? activeColor
-              : selectionColor,
+          selectionColor,
+          cursorColor:
+            typeof cursorColor === 'undefined' ? activeColor : cursorColor,
+          placeholderTextColor: placeholderTextColor ?? placeholderColor,
           onFocus,
           onBlur,
           underlineColorAndroid: 'transparent',
           multiline,
           style: [
             styles.input,
-            { paddingLeft, paddingRight },
             !multiline || (multiline && height) ? { height: flatHeight } : {},
             paddingFlat,
             {
+              paddingLeft,
+              paddingRight,
               ...font,
               fontSize,
+              lineHeight,
               fontWeight,
               color: inputTextColor,
               textAlignVertical: multiline ? 'top' : 'center',
               textAlign: textAlign
                 ? textAlign
-                : I18nManager.isRTL
+                : I18nManager.getConstants().isRTL
                 ? 'right'
                 : 'left',
             },
             Platform.OS === 'web' && { outline: 'none' },
             adornmentStyleAdjustmentForNativeInput,
+            contentStyle,
           ],
+          testID,
         })}
       </View>
       <TextInputAdornment {...adornmentProps} />
@@ -374,80 +415,16 @@ const TextInputFlat = ({
 
 export default TextInputFlat;
 
-type UnderlineProps = {
-  parentState: {
-    focused: boolean;
-  };
-  error?: boolean;
-  colors?: {
-    error?: string;
-  };
-  activeColor: string;
-  underlineColorCustom?: string;
-  hasActiveOutline?: boolean;
-};
-
-const Underline = ({
-  parentState,
-  error,
-  colors,
-  activeColor,
-  underlineColorCustom,
-  hasActiveOutline,
-}: UnderlineProps) => {
-  const { isV3 } = useTheme();
-
-  let backgroundColor = parentState.focused
-    ? activeColor
-    : underlineColorCustom;
-
-  if (error) backgroundColor = colors?.error;
-
-  const activeScale = isV3 ? 2 : 1;
-
-  return (
-    <Animated.View
-      style={[
-        styles.underline,
-        isV3 && styles.md3Underline,
-        {
-          backgroundColor,
-          // Underlines is thinner when input is not focused
-          transform: [
-            {
-              scaleY: (isV3 ? hasActiveOutline : parentState.focused)
-                ? activeScale
-                : 0.5,
-            },
-          ],
-        },
-      ]}
-    />
-  );
-};
-
 const styles = StyleSheet.create({
   placeholder: {
     position: 'absolute',
     left: 0,
-  },
-  underline: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 2,
-    zIndex: 1,
-  },
-  md3Underline: {
-    height: 1,
   },
   labelContainer: {
     paddingTop: 0,
     paddingBottom: 0,
   },
   input: {
-    flexGrow: 1,
     margin: 0,
   },
   inputFlat: {

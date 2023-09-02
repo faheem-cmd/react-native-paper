@@ -1,6 +1,6 @@
 import * as React from 'react';
-
 import {
+  GestureResponderEvent,
   StyleProp,
   StyleSheet,
   TextStyle,
@@ -11,10 +11,10 @@ import {
 import Checkbox from './Checkbox';
 import CheckboxAndroid from './CheckboxAndroid';
 import CheckboxIOS from './CheckboxIOS';
-import Text from '../Typography/Text';
+import { useInternalTheme } from '../../core/theming';
+import type { ThemeProp, MD3TypescaleKey } from '../../types';
 import TouchableRipple from '../TouchableRipple/TouchableRipple';
-import { withTheme } from '../../core/theming';
-import type { MD3TypescaleKey, Theme } from '../../types';
+import Text from '../Typography/Text';
 
 export type Props = {
   /**
@@ -32,7 +32,7 @@ export type Props = {
   /**
    * Function to execute on press.
    */
-  onPress?: () => void;
+  onPress?: (e: GestureResponderEvent) => void;
   /**
    * Accessibility label for the touchable. This is read by the screen reader when the user taps the touchable.
    */
@@ -49,6 +49,10 @@ export type Props = {
    * Additional styles for container View.
    */
   style?: StyleProp<ViewStyle>;
+  /**
+   * Specifies the largest possible scale a title font can reach.
+   */
+  labelMaxFontSizeMultiplier?: number;
   /**
    * Style that is passed to Label element.
    */
@@ -73,7 +77,7 @@ export type Props = {
   /**
    * @optional
    */
-  theme: Theme;
+  theme?: ThemeProp;
   /**
    * testID to be used on tests.
    */
@@ -114,15 +118,17 @@ const CheckboxItem = ({
   label,
   onPress,
   labelStyle,
-  theme,
+  theme: themeOverrides,
   testID,
   mode,
   position = 'trailing',
   accessibilityLabel = label,
   disabled,
   labelVariant = 'bodyLarge',
+  labelMaxFontSizeMultiplier = 1.5,
   ...props
 }: Props) => {
+  const theme = useInternalTheme(themeOverrides);
   const checkboxProps = { ...props, status, theme, disabled };
   const isLeading = position === 'leading';
   let checkbox;
@@ -157,6 +163,7 @@ const CheckboxItem = ({
       onPress={onPress}
       testID={testID}
       disabled={disabled}
+      theme={theme}
     >
       <View
         style={[styles.container, style]}
@@ -166,6 +173,8 @@ const CheckboxItem = ({
         {isLeading && checkbox}
         <Text
           variant={labelVariant}
+          testID={`${testID}-text`}
+          maxFontSizeMultiplier={labelMaxFontSizeMultiplier}
           style={[
             styles.label,
             !theme.isV3 && styles.font,
@@ -183,12 +192,10 @@ const CheckboxItem = ({
 
 CheckboxItem.displayName = 'Checkbox.Item';
 
-export default withTheme(CheckboxItem);
+export default CheckboxItem;
 
 // @component-docs ignore-next-line
-const CheckboxItemWithTheme = withTheme(CheckboxItem);
-// @component-docs ignore-next-line
-export { CheckboxItemWithTheme as CheckboxItem };
+export { CheckboxItem };
 
 const styles = StyleSheet.create({
   container: {

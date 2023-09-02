@@ -1,19 +1,22 @@
 import * as React from 'react';
-import { View, Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
+
 import type { StackNavigationProp } from '@react-navigation/stack';
 import {
   Appbar,
   FAB,
-  Switch,
-  Paragraph,
-  Text,
-  useTheme,
-  RadioButton,
   List,
+  Paragraph,
+  RadioButton,
+  Snackbar,
+  Switch,
+  Text,
 } from 'react-native-paper';
-import ScreenWrapper from '../ScreenWrapper';
-import { yellowA200 } from '../../../src/styles/themes/v2/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useExampleTheme } from '..';
+import { yellowA200 } from '../../../src/styles/themes/v2/colors';
+import ScreenWrapper from '../ScreenWrapper';
 
 type Props = {
   navigation: StackNavigationProp<{}>;
@@ -34,8 +37,9 @@ const AppbarExample = ({ navigation }: Props) => {
   const [appbarMode, setAppbarMode] = React.useState<AppbarModes>('small');
   const [showCalendarIcon, setShowCalendarIcon] = React.useState(false);
   const [showElevated, setShowElevated] = React.useState(false);
+  const [showSnackbar, setShowSnackbar] = React.useState(false);
 
-  const theme = useTheme();
+  const theme = useExampleTheme();
   const { bottom, left, right } = useSafeAreaInsets();
   const height = theme.isV3 ? 80 : 56;
 
@@ -58,6 +62,7 @@ const AppbarExample = ({ navigation }: Props) => {
           <Appbar.Content
             title="Title"
             subtitle={showSubtitle ? 'Subtitle' : null}
+            onPress={() => setShowSnackbar(true)}
           />
           {isCenterAlignedMode
             ? false
@@ -156,7 +161,7 @@ const AppbarExample = ({ navigation }: Props) => {
   return (
     <>
       <ScreenWrapper
-        style={styles.container}
+        style={{ marginBottom: height + bottom }}
         contentContainerStyle={styles.contentContainer}
       >
         {theme.isV3 ? (
@@ -214,6 +219,13 @@ const AppbarExample = ({ navigation }: Props) => {
         {theme.isV3 && renderFAB()}
       </Appbar>
       {!theme.isV3 && renderFAB()}
+      <Snackbar
+        visible={showSnackbar}
+        onDismiss={() => setShowSnackbar(false)}
+        duration={Snackbar.DURATION_SHORT}
+      >
+        Heading pressed
+      </Snackbar>
     </>
   );
 };
@@ -223,9 +235,6 @@ AppbarExample.title = 'Appbar';
 export default AppbarExample;
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 56,
-  },
   contentContainer: {
     paddingVertical: 8,
   },

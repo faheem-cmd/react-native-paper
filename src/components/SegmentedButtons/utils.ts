@@ -1,13 +1,20 @@
 import { StyleSheet, ViewStyle } from 'react-native';
+
 import color from 'color';
-import type { Theme } from '../../types';
+
 import { black, white } from '../../styles/themes/v2/colors';
+import type { InternalTheme } from '../../types';
 
 type BaseProps = {
-  theme: Theme;
+  theme: InternalTheme;
   disabled?: boolean;
   checked: boolean;
 };
+
+type SegmentedButtonProps = {
+  checkedColor?: string;
+  uncheckedColor?: string;
+} & BaseProps;
 
 const DEFAULT_PADDING = 9;
 
@@ -35,7 +42,7 @@ export const getDisabledSegmentedButtonStyle = ({
   index,
   buttons,
 }: {
-  theme: Theme;
+  theme: InternalTheme;
   buttons: { disabled?: boolean }[];
   index: number;
 }): ViewStyle => {
@@ -55,7 +62,7 @@ export const getSegmentedButtonBorderRadius = ({
   segment,
   theme,
 }: {
-  theme: Theme;
+  theme: InternalTheme;
   segment?: 'first' | 'last';
 }): ViewStyle => {
   if (segment === 'first') {
@@ -122,25 +129,34 @@ const getSegmentedButtonBorderWidth = ({
 const getSegmentedButtonTextColor = ({
   theme,
   disabled,
-}: Omit<BaseProps, 'checked'>) => {
+  checked,
+  checkedColor,
+  uncheckedColor,
+}: SegmentedButtonProps) => {
   if (theme.isV3) {
     if (disabled) {
       return theme.colors.onSurfaceDisabled;
     }
-    return theme.colors.onSurface;
-  } else {
-    if (disabled) {
-      return theme.colors.disabled;
+    if (checked) {
+      return checkedColor ?? theme.colors.onSecondaryContainer;
     }
-    return theme.colors.primary;
+    return uncheckedColor ?? theme.colors.onSurface;
   }
+
+  if (disabled) {
+    return theme.colors.disabled;
+  }
+  // Primary color is used for checked state too.
+  return theme.colors.primary;
 };
 
 export const getSegmentedButtonColors = ({
   theme,
   disabled,
   checked,
-}: BaseProps) => {
+  checkedColor,
+  uncheckedColor,
+}: SegmentedButtonProps) => {
   const backgroundColor = getSegmentedButtonBackgroundColor({
     theme,
     checked,
@@ -150,7 +166,13 @@ export const getSegmentedButtonColors = ({
     disabled,
     checked,
   });
-  const textColor = getSegmentedButtonTextColor({ theme, disabled });
+  const textColor = getSegmentedButtonTextColor({
+    theme,
+    disabled,
+    checked,
+    checkedColor,
+    uncheckedColor,
+  });
   const borderWidth = getSegmentedButtonBorderWidth({ theme });
 
   return { backgroundColor, borderColor, textColor, borderWidth };

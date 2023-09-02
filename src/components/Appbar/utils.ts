@@ -1,18 +1,27 @@
 import React from 'react';
-import color from 'color';
-import { StyleSheet } from 'react-native';
 import type { ColorValue, StyleProp, ViewStyle } from 'react-native';
-import AppbarContent from './AppbarContent';
+import { StyleSheet, Animated } from 'react-native';
+
 import AppbarAction from './AppbarAction';
 import AppbarBackAction from './AppbarBackAction';
+import AppbarContent from './AppbarContent';
 import overlay from '../../styles/overlay';
-import type { Theme } from '../../types';
 import { black, white } from '../../styles/themes/v2/colors';
+import type { InternalTheme, ThemeProp } from '../../types';
+import Tooltip from '../Tooltip/Tooltip';
 
 export type AppbarModes = 'small' | 'medium' | 'large' | 'center-aligned';
 
+const borderStyleProperties = [
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomRightRadius',
+  'borderBottomLeftRadius',
+];
+
 export const getAppbarColor = (
-  theme: Theme,
+  theme: InternalTheme,
   elevation: number,
   customBackground?: ColorValue,
   elevated?: boolean
@@ -32,13 +41,28 @@ export const getAppbarColor = (
   }
 
   if (elevated) {
-    return color(colors.surface)
-      .mix(color(colors.primary), 0.08)
-      .rgb()
-      .string();
+    return theme.colors.elevation.level2;
   }
 
   return colors.surface;
+};
+
+export const getAppbarBorders = (
+  style:
+    | Animated.Value
+    | Animated.AnimatedInterpolation<string | number>
+    | Animated.WithAnimatedObject<ViewStyle>
+) => {
+  const borders: Record<string, number> = {};
+
+  for (const property of borderStyleProperties) {
+    const value = style[property as keyof typeof style];
+    if (value) {
+      borders[property] = value;
+    }
+  }
+
+  return borders;
 };
 
 type RenderAppbarContentProps = {
@@ -46,9 +70,10 @@ type RenderAppbarContentProps = {
   isDark: boolean;
   shouldCenterContent?: boolean;
   isV3: boolean;
-  renderOnly?: React.ReactNode[];
-  renderExcept?: React.ReactNode[];
+  renderOnly?: (React.ComponentType<any> | false)[];
+  renderExcept?: React.ComponentType<any>[];
   mode?: AppbarModes;
+  theme?: ThemeProp;
 };
 
 export const DEFAULT_APPBAR_HEIGHT = 56;
@@ -66,7 +91,7 @@ export const modeTextVariant = {
   medium: 'headlineSmall',
   large: 'headlineMedium',
   'center-aligned': 'titleLarge',
-};
+} as const;
 
 export const renderAppbarContent = ({
   children,
@@ -76,9 +101,10 @@ export const renderAppbarContent = ({
   renderOnly,
   renderExcept,
   mode = 'small',
+  theme,
 }: RenderAppbarContentProps) => {
   return (
-    React.Children.toArray(children)
+    React.Children.toArray(children as React.ReactNode | React.ReactNode[])
       .filter((child) => child != null && typeof child !== 'boolean')
       .filter((child) =>
         // @ts-expect-error: TypeScript complains about the type of type but it doesn't matter
@@ -89,7 +115,7 @@ export const renderAppbarContent = ({
       .map((child, i) => {
         if (
           !React.isValidElement(child) ||
-          ![AppbarContent, AppbarAction, AppbarBackAction].includes(
+          ![AppbarContent, AppbarAction, AppbarBackAction, Tooltip].includes(
             // @ts-expect-error: TypeScript complains about the type of type but it doesn't matter
             child.type
           )
@@ -101,14 +127,17 @@ export const renderAppbarContent = ({
           color?: string;
           style?: StyleProp<ViewStyle>;
           mode?: AppbarModes;
+          theme?: ThemeProp;
         } = {
-          color: isV3
-            ? undefined
-            : typeof child.props.color !== 'undefined'
-            ? child.props.color
-            : isDark
-            ? white
-            : black,
+          theme,
+          color:
+            typeof child.props.color !== 'undefined'
+              ? child.props.color
+              : isV3
+              ? undefined
+              : isDark
+              ? white
+              : black,
         };
 
         if (child.type === AppbarContent) {
